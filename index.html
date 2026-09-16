@@ -153,6 +153,13 @@
     user-select: none; border-bottom: 1px solid #E7ECF2;
   }
   .card-header .ttl { flex: 1; }
+  input.ttl.gtitle {
+    font-family: var(--sans); font-weight: bold; font-size: 13.5px; color: var(--graublau);
+    border: none; outline: none; background: transparent; padding: 2px 3px; min-width: 60px;
+  }
+  input.ttl.gtitle::placeholder { color: #b7c1ca; font-weight: normal; }
+  input.ttl.gtitle:focus { background: var(--panel); border-radius: 3px; }
+  .card.ocker input.ttl.gtitle { color: #fff; }
   .card-header .chev { font-size: 10px; color: var(--perlenzian); transition: transform 0.15s; }
   .card.collapsed .chev { transform: rotate(-90deg); }
   .card.collapsed .card-body { display: none; }
@@ -512,60 +519,34 @@ const LAYERS = [
   { id: 'team',        num: 'IV',  title: 'TEAM', sub: '1 Ziel definieren · 2 Entwickeln · 3 Evaluieren' }
 ];
 
-const GOALS = [
-  { id:'sh-winkler', layer:'stakeholder', dept:null, title:'Christian Winkler',
-    subtitle:'Vertrauen & Rückhalt sichern', wofuer:['Handlungsfähigkeit & Wirkungskraft'] },
-  { id:'sh-team', layer:'stakeholder', dept:null, title:'Führungsteam',
-    subtitle:'formieren, organisieren, entwickeln',
-    wofuer:['Koordination von Bereichen','„Wir-Gefühl" & Identität im Unternehmen tragen','Aufwertung von Führungs- & Unternehmenskultur'] },
-  { id:'liquiplanung', layer:'produkte', dept:null, ocker:true, title:'Liquiditätsplanung',
-    subtitle:'Qualitätskriterien: gruppenweit, bankfähig, flexibel, messbar',
-    bullets:['Ist-Zahlen','Modell & Projektplanung','Finanzierungsparameter'] },
-  { id:'p-rw-zahllauf', layer:'produkte', dept:'RW', title:'vollst. Zahllauf' },
-  { id:'p-rw-monat', layer:'produkte', dept:'RW', title:'Monatsabschluss' },
-  { id:'p-rw-reporting', layer:'produkte', dept:'RW', title:'öffentl. Reporting',
-    wofuer:['stabile Datenbasis','Compliance & verlässliche Prozesse'] },
-  { id:'p-co-projekt', layer:'produkte', dept:'CO', title:'Projektcontrolling',
-    wofuer:['transparente Berichte & Entscheidungsgrundlagen'] },
-  { id:'p-pf-lfr', layer:'produkte', dept:'PF', title:'Lfr. Relationship Management' },
-  { id:'p-pf-struk', layer:'produkte', dept:'PF', title:'Finanzierungsstrukturierung' },
-  { id:'s-rw-reebuild', layer:'prozesse', dept:'RW', title:'Einführung reebuild', bullets:['ZV & Freigabe','Anbindung FiBu'] },
-  { id:'s-rw-bridge', layer:'prozesse', dept:'RW', title:'Bridge-Lösung mit Cloud …',
-    wofuer:['Zeitersparnis','Ressourcen frei für Wichtiges'] },
-  { id:'s-co-coinvest', layer:'prozesse', dept:'CO', title:'Co-Investment-Modell' },
-  { id:'s-co-liquiplan', layer:'prozesse', dept:'CO', title:'Liquiplan-System' },
-  { id:'s-co-mmx', layer:'prozesse', dept:'CO', title:'Einführung MMX',
-    wofuer:['bessere Infrastruktur & klare Information'] },
-  { id:'s-pf-rahmen', layer:'prozesse', dept:'PF', title:'Rahmenvereinbarung',
-    wofuer:['mehr Liquidität & mehr Handlungsspielraum'] },
-  { id:'team-rw', layer:'team', dept:'RW', title:'Rechnungswesen – Anforderungen',
-    bullets:['zuverlässige Services','Projekt-Mgmt','Führung SMA'] },
-  { id:'team-co', layer:'team', dept:'CO', title:'Controlling – Anforderungen',
-    bullets:['System-Design (xls etc.)','klare Unterlagen','Projekt-Mgmt'] },
-  { id:'team-pf', layer:'team', dept:'PF', title:'Projektfinanzierung – Anforderungen',
-    bullets:['viele gleichzeitige Prozesse im Griff','Koordinieren / Delegieren','vorausschauend arbeiten'] }
-];
+/* Ziele/Karten: dynamisch, aus Supabase-Tabelle "goals" geladen (siehe loadAll()). */
+let GOALS = [];
 
 /* Elements-Index kompatibel zur classic-Version (element_notes/details/dependencies) */
-const ELEMENTS = [
-  { id: 'zweck', title: 'ZWECK', group: 'Überschrift' },
-  { id: 'zweck-main', title: 'Steuerung der Gruppe über Liquidität', group: 'ZWECK' },
-  { id: 'stakeholder', title: 'STAKEHOLDER', group: 'Überschrift' },
-  { id: 'produkte', title: 'PRODUKTE & SERVICES', group: 'Überschrift' },
-  { id: 'prozesse', title: 'PROZESSE & SYSTEME', group: 'Überschrift' },
-  { id: 'team', title: 'TEAM', group: 'Überschrift' }
-];
-['produkte', 'prozesse'].forEach(layerId => {
-  Object.values(DEPTS).forEach(dname => {
-    ELEMENTS.push({ id: layerId + '__' + dname, title: dname + ' (' + (layerId === 'produkte' ? 'PRODUKTE & SERVICES' : 'PROZESSE & SYSTEME') + ')', group: layerId === 'produkte' ? 'PRODUKTE & SERVICES' : 'PROZESSE & SYSTEME' });
+let ELEMENTS = [];
+let ELEMENTS_BY_ID = {};
+function buildElements() {
+  ELEMENTS = [
+    { id: 'zweck', title: 'ZWECK', group: 'Überschrift' },
+    { id: 'zweck-main', title: 'Steuerung der Gruppe über Liquidität', group: 'ZWECK' },
+    { id: 'stakeholder', title: 'STAKEHOLDER', group: 'Überschrift' },
+    { id: 'produkte', title: 'PRODUKTE & SERVICES', group: 'Überschrift' },
+    { id: 'prozesse', title: 'PROZESSE & SYSTEME', group: 'Überschrift' },
+    { id: 'team', title: 'TEAM', group: 'Überschrift' }
+  ];
+  ['produkte', 'prozesse'].forEach(layerId => {
+    Object.values(DEPTS).forEach(dname => {
+      ELEMENTS.push({ id: layerId + '__' + dname, title: dname + ' (' + (layerId === 'produkte' ? 'PRODUKTE & SERVICES' : 'PROZESSE & SYSTEME') + ')', group: layerId === 'produkte' ? 'PRODUKTE & SERVICES' : 'PROZESSE & SYSTEME' });
+    });
   });
-});
-GOALS.forEach(g => {
-  const lay = LAYERS.find(l => l.id === g.layer);
-  ELEMENTS.push({ id: g.id, title: g.title, group: g.dept ? DEPTS[g.dept] : (lay ? lay.title : '') });
-});
-const ELEMENTS_BY_ID = {};
-ELEMENTS.forEach(e => { ELEMENTS_BY_ID[e.id] = e; });
+  GOALS.forEach(g => {
+    const lay = LAYERS.find(l => l.id === g.layer);
+    ELEMENTS.push({ id: g.id, title: g.title, group: g.dept ? DEPTS[g.dept] : (lay ? lay.title : '') });
+  });
+  ELEMENTS_BY_ID = {};
+  ELEMENTS.forEach(e => { ELEMENTS_BY_ID[e.id] = e; });
+}
+buildElements();
 
 const STATUS = {
   offen:     { label: 'Offen' },
@@ -650,7 +631,8 @@ function wofuerOf(goal) {
 async function loadAll() {
   setSyncTag('lade …');
   try {
-    const [mRes, mlRes, enRes, edRes, deRes, rvRes] = await Promise.all([
+    const [gRes, mRes, mlRes, enRes, edRes, deRes, rvRes] = await Promise.all([
+      sb.from('goals').select('*').order('layer', { ascending: true }).order('sort_order', { ascending: true }),
       sb.from('measures').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
       sb.from('measure_links').select('*').order('created_at', { ascending: true }),
       sb.from('element_notes').select('*'),
@@ -658,7 +640,9 @@ async function loadAll() {
       sb.from('element_dependencies').select('*').order('created_at', { ascending: true }),
       sb.from('reviews').select('*').order('created_at', { ascending: true })
     ]);
-    for (const r of [mRes, mlRes, enRes, edRes, deRes, rvRes]) { if (r.error) throw r.error; }
+    for (const r of [gRes, mRes, mlRes, enRes, edRes, deRes, rvRes]) { if (r.error) throw r.error; }
+    GOALS = gRes.data || [];
+    buildElements();
     state.measures = {};
     (mRes.data || []).forEach(row => {
       state.measures[row.goal_id] = state.measures[row.goal_id] || [];
@@ -708,6 +692,40 @@ async function dbInsertMeasure(row) {
 }
 async function dbDeleteMeasure(id) {
   const { error } = await sb.from('measures').delete().eq('id', id);
+  if (error) { setStatusBanner('Löschen fehlgeschlagen: ' + error.message); return false; }
+  setSyncTag('gespeichert ' + nowStr());
+  return true;
+}
+
+/* ================= Goals (Ziele/Karten) – dynamisch ================= */
+function newGoalId() {
+  return 'g-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+async function dbInsertGoal(layer, dept, ocker) {
+  const siblings = GOALS.filter(g => g.layer === layer && g.dept === (dept || null));
+  const sortOrder = siblings.reduce((mx, g) => Math.max(mx, g.sort_order || 0), 0) + 1;
+  const row = { id: newGoalId(), layer, dept: dept || null, title: '', ocker: !!ocker, sort_order: sortOrder };
+  const { data, error } = await sb.from('goals').insert(row).select().single();
+  if (error) { setStatusBanner('Speichern fehlgeschlagen: ' + error.message); return null; }
+  return data;
+}
+async function dbUpdateGoal(id, patch) {
+  const { data, error } = await sb.from('goals').update(patch).eq('id', id).select().single();
+  if (error) { setStatusBanner('Speichern fehlgeschlagen: ' + error.message); return null; }
+  setSyncTag('gespeichert ' + nowStr());
+  return data;
+}
+async function dbDeleteGoal(id) {
+  const measureIds = measuresOf(id).map(m => m.id);
+  if (measureIds.length) {
+    await sb.from('measure_links').delete().in('measure_id', measureIds);
+    await sb.from('measures').delete().in('id', measureIds);
+  }
+  await sb.from('element_notes').delete().eq('element_id', id);
+  await sb.from('element_details').delete().eq('element_id', id);
+  await sb.from('element_dependencies').delete().eq('element_id', id);
+  await sb.from('element_dependencies').delete().eq('depends_on_id', id);
+  const { error } = await sb.from('goals').delete().eq('id', id);
   if (error) { setStatusBanner('Löschen fehlgeschlagen: ' + error.message); return false; }
   setSyncTag('gespeichert ' + nowStr());
   return true;
@@ -833,8 +851,11 @@ function goalCardHtml(goal) {
   if (UI.showWofuer) body += wofuerOf(goal).map(w => '<div class="wofuer-line">→ <b>wofür:</b> ' + esc(w) + '</div>').join('');
   if (UI.showMeasures) body += measuresBlockHtml(goal);
   return '<div class="card' + (collapsed ? ' collapsed' : '') + (goal.ocker ? ' ocker' : '') + '" data-card="' + goal.id + '">' +
-    '<div class="card-header" data-collapse="' + goal.id + '"><span class="ttl">' + esc(goal.title) + '</span>' + progHtml(p) +
+    '<div class="card-header" data-collapse="' + goal.id + '">' +
+    '<input type="text" class="ttl gtitle" data-gid="' + goal.id + '" placeholder="Titel…" value="' + esc(goal.title) + '" onclick="event.stopPropagation()">' +
+    progHtml(p) +
     '<button class="iconbtn" data-detail="' + goal.id + '" title="Details / wofür / Notizen">ⓘ</button>' +
+    '<button class="iconbtn del" data-delgoal="' + goal.id + '" title="Ziel löschen (inkl. Maßnahmen)">×</button>' +
     '<span class="chev">▾</span></div>' +
     '<div class="card-body">' + body + '</div></div>';
 }
@@ -844,12 +865,12 @@ function deptColsHtml(layerId) {
   Object.keys(DEPTS).forEach(dk => {
     if (!deptVisible(dk)) return;
     const goals = GOALS.filter(g => g.layer === layerId && g.dept === dk);
-    if (!goals.length) return;
     const elKey = layerId + '__' + DEPTS[dk];
     const hasEl = !!ELEMENTS_BY_ID[elKey];
     html += '<div class="deptCol"><div class="deptHeader"><span>' + DEPTS[dk] + '</span>' +
       (hasEl ? '<button class="iconbtn" data-detail="' + elKey + '" title="Details / Notizen" style="color:#fff">ⓘ</button>' : '') +
-      '</div>' + goals.map(goalCardHtml).join('') + '</div>';
+      '<button class="iconbtn" data-addgoal="' + layerId + '|' + dk + '" title="Neues Ziel in ' + esc(DEPTS[dk]) + '" style="color:#fff">+</button>' +
+      '</div>' + (goals.length ? goals.map(goalCardHtml).join('') : '<div class="empty">Noch keine Ziele.</div>') + '</div>';
   });
   html += '</div>';
   return html;
@@ -858,8 +879,15 @@ function deptColsHtml(layerId) {
 function renderMap() {
   let html = '';
   LAYERS.forEach(lay => {
+    if (UI.dept !== 'all') {
+      // Bei aktivem Bereichsfilter: Ebene ohne Bereichsspalten (z.B. Stakeholder) nur zeigen, wenn sie sichtbare Ziele hat
+      const hasDepts = lay.id !== 'stakeholder';
+      if (!hasDepts) {
+        const any = GOALS.some(g => g.layer === lay.id && goalVisible(g));
+        if (!any) return;
+      }
+    }
     const goals = GOALS.filter(g => g.layer === lay.id && goalVisible(g));
-    if (!goals.length) return;
     const p = progOf(GOALS.filter(g => g.layer === lay.id));
     html += '<section class="layer"><div class="layerHead">' +
       '<span class="layerNum">' + lay.num + '</span>' +
@@ -869,12 +897,12 @@ function renderMap() {
       '<span class="layerProg">' + (p.total ? p.done + ' von ' + p.total + ' erledigt ' + progHtml(p) : '') + '</span>' +
       '</div>';
     if (lay.id === 'stakeholder') {
-      html += '<div class="cols2">' + goals.map(goalCardHtml).join('') + '</div>';
-    } else if (lay.id === 'produkte') {
-      const top = goals.find(g => g.id === 'liquiplanung');
-      if (top) html += goalCardHtml(top);
-      html += deptColsHtml('produkte');
+      html += '<button class="addbtn" data-addgoal="' + lay.id + '|" style="margin-bottom:10px">+ Ziel</button>';
+      html += goals.length ? ('<div class="cols2">' + goals.map(goalCardHtml).join('') + '</div>') : '<div class="empty">Noch keine Ziele.</div>';
     } else {
+      const topGoals = goals.filter(g => !g.dept && g.ocker);
+      html += '<button class="addbtn" data-addgoal="' + lay.id + '|::top" style="margin-bottom:10px">+ Ziel (Vollbreite)</button>';
+      topGoals.forEach(g => { html += goalCardHtml(g); });
       html += deptColsHtml(lay.id);
     }
     html += '</section>';
@@ -1646,17 +1674,17 @@ function drawMapExport(spec) {
   // Karten-Reihe ohne Abteilungen (Stakeholder).
   const layerPlans = LAYERS.map(function (lay) {
     const goals = GOALS.filter(function (g) { return g.layer === lay.id; });
-    const topGoal = goals.find(function (g) { return g.dept === null && g.ocker; });
     const deptGoalsMap = {};
     DEPT_KEYS.forEach(function (dk) { deptGoalsMap[dk] = goals.filter(function (g) { return g.dept === dk; }); });
     const hasDepts = DEPT_KEYS.some(function (dk) { return deptGoalsMap[dk].length > 0; });
-    const plainGoals = hasDepts ? [] : goals.filter(function (g) { return !topGoal || g.id !== topGoal.id; });
+    const topGoals = hasDepts ? goals.filter(function (g) { return !g.dept && g.ocker; }) : [];
+    const plainGoals = hasDepts ? [] : goals;
     const maxDeptRows = hasDepts ? Math.max.apply(null, DEPT_KEYS.map(function (dk) { return deptGoalsMap[dk].length; })) : 0;
     const plainCols = Math.min(2, plainGoals.length) || 1;
     const plainRows = plainGoals.length ? Math.ceil(plainGoals.length / plainCols) : 0;
     const rowsUsed = hasDepts ? maxDeptRows : plainRows;
-    const units = (topGoal ? TOP_UNIT : 0) + rowsUsed;
-    return { lay: lay, goals: goals, topGoal: topGoal, deptGoalsMap: deptGoalsMap, hasDepts: hasDepts, plainGoals: plainGoals, plainCols: plainCols, plainRows: plainRows, maxDeptRows: maxDeptRows, rowsUsed: rowsUsed, units: units };
+    const units = topGoals.length * TOP_UNIT + rowsUsed;
+    return { lay: lay, goals: goals, topGoals: topGoals, deptGoalsMap: deptGoalsMap, hasDepts: hasDepts, plainGoals: plainGoals, plainCols: plainCols, plainRows: plainRows, maxDeptRows: maxDeptRows, rowsUsed: rowsUsed, units: units };
   });
 
   let totalFixed = 0, totalCardUnits = 0;
@@ -1664,7 +1692,8 @@ function drawMapExport(spec) {
     totalFixed += layerHeaderH;
     if (p.hasDepts) totalFixed += deptHeaderH;
     totalFixed += layerGapAfter;
-    if (p.topGoal && p.rowsUsed > 0) totalFixed += cardGapV;
+    if (p.topGoals.length && p.rowsUsed > 0) totalFixed += cardGapV;
+    if (p.topGoals.length > 1) totalFixed += (p.topGoals.length - 1) * cardGapV;
     if (p.rowsUsed > 1) totalFixed += (p.rowsUsed - 1) * cardGapV;
     totalCardUnits += p.units;
   });
@@ -1682,10 +1711,12 @@ function drawMapExport(spec) {
     ctx.fillText(lay.title, contentX + 30 * s, y + layerHeaderH * 0.6);
     y += layerHeaderH;
 
-    if (p.topGoal) {
-      drawMapGoalCard(ctx, p.topGoal, contentX, y, contentW, cardH * TOP_UNIT, C, s);
-      y += cardH * TOP_UNIT;
-      if (p.rowsUsed > 0) y += cardGapV;
+    if (p.topGoals.length) {
+      p.topGoals.forEach(function (tg) {
+        drawMapGoalCard(ctx, tg, contentX, y, contentW, cardH * TOP_UNIT, C, s);
+        y += cardH * TOP_UNIT + cardGapV;
+      });
+      if (!p.rowsUsed) y -= cardGapV;
     }
 
     if (p.hasDepts) {
@@ -1793,6 +1824,41 @@ document.addEventListener('click', async function (e) {
   if (col && !t.closest('.iconbtn') && !t.closest('.prog')) {
     UI.collapsed[col.dataset.collapse] = !UI.collapsed[col.dataset.collapse];
     saveUI(); render(); return;
+  }
+
+  const addGoal = t.closest('[data-addgoal]');
+  if (addGoal) {
+    const [layerId, deptRaw] = addGoal.dataset.addgoal.split('|');
+    const isTop = deptRaw === '::top';
+    const dept = isTop || !deptRaw ? null : deptRaw;
+    const row = await dbInsertGoal(layerId, dept, isTop);
+    if (row) {
+      GOALS.push(row);
+      buildElements();
+      render();
+      const input = document.querySelector('.gtitle[data-gid="' + row.id + '"]');
+      if (input) input.focus();
+    }
+    return;
+  }
+
+  const delGoal = t.closest('[data-delgoal]');
+  if (delGoal) {
+    const gid = delGoal.dataset.delgoal;
+    const g = goalById(gid);
+    const label = g ? (g.title || '(ohne Titel)') : gid;
+    if (!window.confirm('Ziel "' + label + '" wirklich löschen? Alle zugehörigen Maßnahmen, Details und Notizen werden mitgelöscht.')) return;
+    if (await dbDeleteGoal(gid)) {
+      GOALS = GOALS.filter(x => x.id !== gid);
+      delete state.measures[gid];
+      delete state.notes[gid];
+      delete state.details[gid];
+      delete state.deps[gid];
+      Object.keys(state.deps).forEach(k => { state.deps[k] = (state.deps[k] || []).filter(d => d.depends_on_id !== gid); });
+      buildElements();
+      render();
+    }
+    return;
   }
 
   const add = t.closest('[data-add]');
@@ -1920,6 +1986,18 @@ document.addEventListener('click', async function (e) {
 document.addEventListener('input', function (e) {
   const t = e.target;
   if (t.matches('[data-refl]')) { draftReview[t.dataset.refl] = t.value; return; }
+  if (t.matches('.gtitle') && t.dataset.gid) {
+    const g = goalById(t.dataset.gid);
+    if (!g) return;
+    g.title = t.value;
+    const key = 'goal:' + t.dataset.gid + ':title';
+    clearTimeout(debounceTimers[key]);
+    debounceTimers[key] = setTimeout(() => {
+      dbUpdateGoal(g.id, { title: g.title });
+      buildElements();
+    }, 600);
+    return;
+  }
   if (t.matches('[data-field]') && t.dataset.mid) {
     const f = findM(t.dataset.mid);
     if (!f) return;
@@ -2073,4 +2151,3 @@ function cleanupDrag() {
 </script>
 </body>
 </html>
-
