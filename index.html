@@ -145,6 +145,15 @@
     margin-bottom: 10px; overflow: hidden;
     box-shadow: 0 2px 6px rgba(20,30,40,0.25);
   }
+  .card.dragging { opacity: 0.45; }
+  .card.dropbefore { box-shadow: 0 -3px 0 0 var(--ocker); }
+  .card.dropafter { box-shadow: 0 3px 0 0 var(--ocker); }
+  .card.archived { opacity: 0.6; }
+  .card.archived .card-header { background: #F0F2F5; }
+  .ghandle { cursor: grab; color: #b7c1ca; font-size: 13px; padding: 0 2px; flex: none; user-select: none; }
+  .ghandle:active { cursor: grabbing; }
+  .card.ocker .ghandle { color: rgba(255,255,255,0.7); }
+  .badge.archivedbadge { background: #F0F2F5; border-color: #C4D0DF; color: var(--perlenzian); flex: none; }
   .card-header {
     background: #fff; color: var(--graublau);
     font-weight: bold; font-size: 13.5px;
@@ -423,7 +432,7 @@
 
   @media print {
     body { background: #fff; }
-    nav.tabs, .filterbar, footer.savefoot, .addbtn, .iconbtn, .handle { display: none !important; }
+    nav.tabs, .filterbar, footer.savefoot, .addbtn, .iconbtn, .handle, .ghandle { display: none !important; }
     .card.collapsed .card-body { display: block; }
     header.brand { color: var(--graublau); }
     .apptitle h1, h2.layerTitle, .purposeband .pv { color: var(--graublau); }
@@ -468,6 +477,7 @@
       <button class="toolbtn" id="toggleWofuer" data-viewtoggle="showWofuer" title="&quot;Wofür&quot;-Zeilen ein-/ausblenden">Wofür</button>
       <button class="toolbtn" id="toggleMeasures" data-viewtoggle="showMeasures" title="Maßnahmen-Abschnitte ein-/ausblenden">Maßnahmen</button>
       <button class="toolbtn" id="toggleDeps" data-viewtoggle="showDeps" title="Abhängigkeiten (Rahmen + Pfeile) ein-/ausblenden">Abhängigkeiten</button>
+      <button class="toolbtn" id="toggleArchived" data-viewtoggle="showArchived" title="Archivierte Ziele ein-/ausblenden">Archiv</button>
     </span>
     <span class="synctag" id="syncTag">verbinde …</span>
   </span>
@@ -566,7 +576,7 @@ const debounceTimers = {};
 let draftReview = { track: '', q1: '', q2: '', q3: '' };
 
 const UI_KEY = 'winegg_cockpit_web_ui';
-let UI = { view: 'map', dept: 'all', hideDone: false, collapsed: {}, showDetails: true, showWofuer: true, showMeasures: true, showDeps: false };
+let UI = { view: 'map', dept: 'all', hideDone: false, collapsed: {}, showDetails: true, showWofuer: true, showMeasures: true, showDeps: false, showArchived: false };
 try { UI = Object.assign(UI, JSON.parse(localStorage.getItem(UI_KEY) || '{}')); } catch (e) {}
 function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(UI)); } catch (e) {} }
 
@@ -596,9 +606,15 @@ function goalById(id) { return GOALS.find(g => g.id === id); }
 function measuresOf(gid) { state.measures[gid] = state.measures[gid] || []; return state.measures[gid]; }
 function allMeasures() {
   const out = [];
-  GOALS.forEach(g => { measuresOf(g.id).forEach(m => out.push({ goal: g, m })); });
+  GOALS.forEach(g => {
+    if (g.archived && !UI.showArchived) return;
+    measuresOf(g.id).forEach(m => out.push({ goal: g, m }));
+  });
   return out;
 }
+/* Gruppenschlüssel für Kartenreihenfolge & "+ Ziel"-Zuordnung: layer|dept, layer| (Stakeholder-Raster) oder layer|::top (Vollbreite) */
+function cardGroupKey(g) { return g.layer + '|' + (g.dept ? g.dept : (g.ocker ? '::top' : '')); }
+function visibleLayerGoals(layerId) { return GOALS.filter(g => g.layer === layerId && (UI.showArchived || !g.archived)); }
 function findM(mid) {
   for (const g of GOALS) {
     const arr = measuresOf(g.id);
@@ -620,7 +636,10 @@ function isBlocked(m) {
   return !!(d && d.open && m.status !== 'erledigt');
 }
 function deptVisible(dept) { return UI.dept === 'all' || !dept || dept === UI.dept; }
-function goalVisible(g) { return UI.dept === 'all' || !g.dept || g.dept === UI.dept; }
+function goalVisible(g) {
+  if (g.archived && !UI.showArchived) return false;
+  return UI.dept === 'all' || !g.dept || g.dept === UI.dept;
+}
 function wofuerOf(goal) {
   const n = state.notes[goal.id];
   if (n && n.wofuer && n.wofuer.length) return n.wofuer;
@@ -850,27 +869,34 @@ function goalCardHtml(goal) {
   }
   if (UI.showWofuer) body += wofuerOf(goal).map(w => '<div class="wofuer-line">→ <b>wofür:</b> ' + esc(w) + '</div>').join('');
   if (UI.showMeasures) body += measuresBlockHtml(goal);
-  return '<div class="card' + (collapsed ? ' collapsed' : '') + (goal.ocker ? ' ocker' : '') + '" data-card="' + goal.id + '">' +
+  const archived = !!goal.archived;
+  return '<div class="card' + (collapsed ? ' collapsed' : '') + (goal.ocker ? ' ocker' : '') + (archived ? ' archived' : '') + '" data-card="' + goal.id + '">' +
     '<div class="card-header" data-collapse="' + goal.id + '">' +
+    '<span class="ghandle" title="Ziehen zum Sortieren">⠿</span>' +
     '<input type="text" class="ttl gtitle" data-gid="' + goal.id + '" placeholder="Titel…" value="' + esc(goal.title) + '" onclick="event.stopPropagation()">' +
+    (archived ? '<span class="badge archivedbadge">archiviert</span>' : '') +
     progHtml(p) +
     '<button class="iconbtn" data-detail="' + goal.id + '" title="Details / wofür / Notizen">ⓘ</button>' +
+    '<button class="iconbtn archivebtn" data-archivegoal="' + goal.id + '" title="' + (archived ? 'Ziel wiederherstellen' : 'Ziel als erledigt archivieren') + '">' + (archived ? '↩' : '📦') + '</button>' +
     '<button class="iconbtn del" data-delgoal="' + goal.id + '" title="Ziel löschen (inkl. Maßnahmen)">×</button>' +
     '<span class="chev">▾</span></div>' +
     '<div class="card-body">' + body + '</div></div>';
 }
 
+function sortedByOrder(arr) { return arr.slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)); }
+
 function deptColsHtml(layerId) {
   let html = '<div class="cols3">';
   Object.keys(DEPTS).forEach(dk => {
     if (!deptVisible(dk)) return;
-    const goals = GOALS.filter(g => g.layer === layerId && g.dept === dk);
+    const goals = sortedByOrder(GOALS.filter(g => g.layer === layerId && g.dept === dk && (UI.showArchived || !g.archived)));
     const elKey = layerId + '__' + DEPTS[dk];
     const hasEl = !!ELEMENTS_BY_ID[elKey];
     html += '<div class="deptCol"><div class="deptHeader"><span>' + DEPTS[dk] + '</span>' +
       (hasEl ? '<button class="iconbtn" data-detail="' + elKey + '" title="Details / Notizen" style="color:#fff">ⓘ</button>' : '') +
       '<button class="iconbtn" data-addgoal="' + layerId + '|' + dk + '" title="Neues Ziel in ' + esc(DEPTS[dk]) + '" style="color:#fff">+</button>' +
-      '</div>' + (goals.length ? goals.map(goalCardHtml).join('') : '<div class="empty">Noch keine Ziele.</div>') + '</div>';
+      '</div><div data-cardlist="' + layerId + '|' + dk + '">' +
+      (goals.length ? goals.map(goalCardHtml).join('') : '<div class="empty">Noch keine Ziele.</div>') + '</div></div>';
   });
   html += '</div>';
   return html;
@@ -887,8 +913,8 @@ function renderMap() {
         if (!any) return;
       }
     }
-    const goals = GOALS.filter(g => g.layer === lay.id && goalVisible(g));
-    const p = progOf(GOALS.filter(g => g.layer === lay.id));
+    const goals = sortedByOrder(GOALS.filter(g => g.layer === lay.id && goalVisible(g)));
+    const p = progOf(visibleLayerGoals(lay.id));
     html += '<section class="layer"><div class="layerHead">' +
       '<span class="layerNum">' + lay.num + '</span>' +
       '<h2 class="layerTitle">' + lay.title + '</h2>' +
@@ -898,11 +924,11 @@ function renderMap() {
       '</div>';
     if (lay.id === 'stakeholder') {
       html += '<button class="addbtn" data-addgoal="' + lay.id + '|" style="margin-bottom:10px">+ Ziel</button>';
-      html += goals.length ? ('<div class="cols2">' + goals.map(goalCardHtml).join('') + '</div>') : '<div class="empty">Noch keine Ziele.</div>';
+      html += goals.length ? ('<div class="cols2" data-cardlist="' + lay.id + '|">' + goals.map(goalCardHtml).join('') + '</div>') : '<div class="empty">Noch keine Ziele.</div>';
     } else {
       const topGoals = goals.filter(g => !g.dept && g.ocker);
       html += '<button class="addbtn" data-addgoal="' + lay.id + '|::top" style="margin-bottom:10px">+ Ziel (Vollbreite)</button>';
-      topGoals.forEach(g => { html += goalCardHtml(g); });
+      if (topGoals.length) html += '<div data-cardlist="' + lay.id + '|::top">' + topGoals.map(goalCardHtml).join('') + '</div>';
       html += deptColsHtml(lay.id);
     }
     html += '</section>';
@@ -970,7 +996,7 @@ function renderReflect() {
 
   let left = '<div class="panelbox"><h3>Standortbestimmung</h3>';
   LAYERS.forEach(lay => {
-    const p = progOf(GOALS.filter(g => g.layer === lay.id));
+    const p = progOf(visibleLayerGoals(lay.id));
     const pct = p.total ? Math.round(p.done / p.total * 100) : 0;
     left += '<div class="lprog"><div class="t"><span>' + lay.num + ' · ' + lay.title + '</span><span>' + (p.total ? p.done + '/' + p.total : '–') + '</span></div>' +
       '<div class="progbar"><i style="width:' + pct + '%"></i></div></div>';
@@ -1056,6 +1082,7 @@ function render() {
   document.getElementById('toggleWofuer').classList.toggle('active', UI.showWofuer);
   document.getElementById('toggleMeasures').classList.toggle('active', UI.showMeasures);
   document.getElementById('toggleDeps').classList.toggle('active', UI.showDeps);
+  document.getElementById('toggleArchived').classList.toggle('active', UI.showArchived);
   const zweckWofuerEl = document.getElementById('zweckWofuer');
   if (zweckWofuerEl) zweckWofuerEl.style.display = UI.showWofuer ? '' : 'none';
   renderFilterbar();
@@ -1477,7 +1504,7 @@ function drawExport(spec) {
   ctx.fillText('EBENEN-FORTSCHRITT', rightX, ly);
   ly += 30 * s;
   LAYERS.forEach(lay => {
-    const p = progOf(GOALS.filter(g => g.layer === lay.id));
+    const p = progOf(visibleLayerGoals(lay.id));
     const pct = p.total ? p.done / p.total : 0;
     ctx.font = (14.5 * s) + 'px Calibri, Arial, sans-serif';
     ctx.fillStyle = C.ink;
@@ -1673,7 +1700,7 @@ function drawMapExport(spec) {
   // ggf. mit einer Vollbreite-Karte davor (Produkte & Services: Liquiditätsplanung), oder eine einfache
   // Karten-Reihe ohne Abteilungen (Stakeholder).
   const layerPlans = LAYERS.map(function (lay) {
-    const goals = GOALS.filter(function (g) { return g.layer === lay.id; });
+    const goals = sortedByOrder(visibleLayerGoals(lay.id));
     const deptGoalsMap = {};
     DEPT_KEYS.forEach(function (dk) { deptGoalsMap[dk] = goals.filter(function (g) { return g.dept === dk; }); });
     const hasDepts = DEPT_KEYS.some(function (dk) { return deptGoalsMap[dk].length > 0; });
@@ -1783,6 +1810,8 @@ document.addEventListener('mousedown', function (e) {
   if (e.target.closest('[data-cmd]')) e.preventDefault();
   const h = e.target.closest('.handle');
   if (h) { const row = h.closest('.mrow'); if (row) row.setAttribute('draggable', 'true'); }
+  const gh = e.target.closest('.ghandle');
+  if (gh) { const card = gh.closest('.card'); if (card) card.setAttribute('draggable', 'true'); }
 });
 
 document.addEventListener('click', async function (e) {
@@ -1821,7 +1850,7 @@ document.addEventListener('click', async function (e) {
   if (viewToggle) { const key = viewToggle.dataset.viewtoggle; UI[key] = !UI[key]; saveUI(); render(); return; }
 
   const col = t.closest('[data-collapse]');
-  if (col && !t.closest('.iconbtn') && !t.closest('.prog')) {
+  if (col && !t.closest('.iconbtn') && !t.closest('.prog') && !t.closest('.ghandle')) {
     UI.collapsed[col.dataset.collapse] = !UI.collapsed[col.dataset.collapse];
     saveUI(); render(); return;
   }
@@ -1838,6 +1867,20 @@ document.addEventListener('click', async function (e) {
       render();
       const input = document.querySelector('.gtitle[data-gid="' + row.id + '"]');
       if (input) input.focus();
+    }
+    return;
+  }
+
+  const archiveGoal = t.closest('[data-archivegoal]');
+  if (archiveGoal) {
+    const gid = archiveGoal.dataset.archivegoal;
+    const g = goalById(gid);
+    if (g) {
+      const newArchived = !g.archived;
+      g.archived = newArchived;
+      g.archived_at = newArchived ? new Date().toISOString() : null;
+      render();
+      dbUpdateGoal(gid, { archived: newArchived, archived_at: g.archived_at });
     }
     return;
   }
@@ -2139,6 +2182,67 @@ function cleanupDrag() {
   document.querySelectorAll('.mrow').forEach(r => {
     r.classList.remove('dragging', 'dropbefore', 'dropafter');
     r.removeAttribute('draggable');
+  });
+}
+
+/* ================= Drag & Drop: Ziel-Karten (Reihenfolge) ================= */
+let dragGoalId = null, dragCardListKey = null;
+
+document.addEventListener('dragstart', function (e) {
+  const card = e.target.closest ? e.target.closest('.card') : null;
+  if (!card || card.getAttribute('draggable') !== 'true') return;
+  const listEl = card.closest('[data-cardlist]');
+  if (!listEl) return;
+  dragGoalId = card.dataset.card;
+  dragCardListKey = listEl.dataset.cardlist;
+  card.classList.add('dragging');
+  try { e.dataTransfer.setData('text/plain', dragGoalId); e.dataTransfer.effectAllowed = 'move'; } catch (err) {}
+});
+document.addEventListener('dragover', function (e) {
+  if (!dragGoalId) return;
+  const listEl = e.target.closest ? e.target.closest('[data-cardlist]') : null;
+  if (!listEl || listEl.dataset.cardlist !== dragCardListKey) return;
+  e.preventDefault();
+  document.querySelectorAll('.card.dropbefore, .card.dropafter').forEach(c => c.classList.remove('dropbefore', 'dropafter'));
+  const card = e.target.closest('.card');
+  if (card && card.dataset.card !== dragGoalId) {
+    const rect = card.getBoundingClientRect();
+    const before = (e.clientY - rect.top) < rect.height / 2;
+    card.classList.add(before ? 'dropbefore' : 'dropafter');
+  }
+});
+document.addEventListener('drop', function (e) {
+  if (!dragGoalId) return;
+  const listEl = e.target.closest ? e.target.closest('[data-cardlist]') : null;
+  if (!listEl || listEl.dataset.cardlist !== dragCardListKey) { cleanupCardDrag(); return; }
+  e.preventDefault();
+  const card = e.target.closest('.card');
+  let targetGid = null, before = true;
+  if (card && card.dataset.card !== dragGoalId) {
+    targetGid = card.dataset.card;
+    const rect = card.getBoundingClientRect();
+    before = (e.clientY - rect.top) < rect.height / 2;
+  }
+  const groupGoals = sortedByOrder(GOALS.filter(g => cardGroupKey(g) === dragCardListKey));
+  let order = groupGoals.map(g => g.id).filter(id => id !== dragGoalId);
+  if (targetGid) {
+    const i = order.indexOf(targetGid);
+    order.splice(before ? i : i + 1, 0, dragGoalId);
+  } else order.push(dragGoalId);
+  order.forEach((id, i) => {
+    const g = goalById(id);
+    if (g && g.sort_order !== i + 1) { g.sort_order = i + 1; dbUpdateGoal(id, { sort_order: i + 1 }); }
+  });
+  cleanupCardDrag(); render();
+});
+document.addEventListener('dragend', function (e) {
+  if (e.target.closest && e.target.closest('.card')) cleanupCardDrag();
+});
+function cleanupCardDrag() {
+  dragGoalId = null; dragCardListKey = null;
+  document.querySelectorAll('.card').forEach(c => {
+    c.classList.remove('dragging', 'dropbefore', 'dropafter');
+    c.removeAttribute('draggable');
   });
 }
 
